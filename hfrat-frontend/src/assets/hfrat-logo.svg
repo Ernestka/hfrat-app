@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="420" height="140" viewBox="0 0 420 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#22C55E"/>
+    </linearGradient>
+  </defs>
+  <!-- Badge / Mark -->
+  <g transform="translate(24,24)">
+    <rect x="0" y="0" width="92" height="92" rx="16" fill="url(#g1)"/>
+    <!-- Medical cross -->
+    <rect x="36" y="18" width="20" height="56" rx="4" fill="#FFFFFF" opacity="0.95"/>
+    <rect x="18" y="36" width="56" height="20" rx="4" fill="#FFFFFF" opacity="0.95"/>
+    <!-- Resource bars -->
+    <rect x="104" y="18" width="12" height="56" rx="6" fill="url(#g2)"/>
+    <rect x="122" y="28" width="12" height="46" rx="6" fill="#60A5FA"/>
+    <rect x="140" y="42" width="12" height="32" rx="6" fill="#F59E0B"/>
+  </g>
+  <!-- Wordmark -->
+  <g transform="translate(170,40)">
+    <text x="0" y="36" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="40" font-weight="800" fill="#0F172A">HFRAT</text>
+    <text x="0" y="64" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#475569">Health Facility Resource Availability Tracker</text>
+  </g>
+</svg>
