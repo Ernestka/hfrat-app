@@ -1,35 +1,95 @@
-import { Routes, Route, Link } from 'react-router-dom'
+import { Routes, Route, Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import Login from './pages/Login'
 import ReporterForm from './pages/ReporterForm'
 import MonitorDashboard from './pages/MonitorDashboard'
-import Landing from './pages/Landing'
 import AdminUserCreator from './pages/AdminUserCreator'
 import ProtectedRoute from './components/ProtectedRoute'
 
 export default function App() {
-    const links = [
-        { to: '/', label: 'Home' },
-        { to: '/login', label: 'Login' },
-        { to: '/reporter', label: 'Reporter' },
-        { to: '/dashboard', label: 'Dashboard' },
-    ]
+    const navigate = useNavigate()
+    const [isAuthenticated, setIsAuthenticated] = useState(false)
+    const [userRole, setUserRole] = useState(null)
+
+    useEffect(() => {
+        // Check if user is logged in
+        const token = localStorage.getItem('access_token')
+        const role = localStorage.getItem('user_role')
+        setIsAuthenticated(!!token)
+        setUserRole(role)
+    }, [])
+
+    // Update auth state when storage changes
+    useEffect(() => {
+        const handleStorageChange = () => {
+            const token = localStorage.getItem('access_token')
+            const role = localStorage.getItem('user_role')
+            setIsAuthenticated(!!token)
+            setUserRole(role)
+        }
+
+        window.addEventListener('storage', handleStorageChange)
+        // Custom event for same-tab updates
+        window.addEventListener('authChange', handleStorageChange)
+
+        return () => {
+            window.removeEventListener('storage', handleStorageChange)
+            window.removeEventListener('authChange', handleStorageChange)
+        }
+    }, [])
+
+    const handleLogout = () => {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('user_role')
+        setIsAuthenticated(false)
+        setUserRole(null)
+        window.dispatchEvent(new Event('authChange'))
+        navigate('/login')
+    }
 
     return (
         <div style={styles.shell}>
             <div style={styles.navWrapper}>
                 <div style={styles.brand}>HFRAT</div>
                 <nav style={styles.nav}>
-                    {links.map((link) => (
-                        <Link key={link.to} to={link.to} style={styles.navLink}>
-                            {link.label}
+                    {!isAuthenticated ? (
+                        <Link to="/login" style={styles.navLink}>
+                            Login
                         </Link>
-                    ))}
+                    ) : (
+                        <>
+                            {userRole === 'REPORTER' && (
+                                <Link to="/reporter" style={styles.navLink}>
+                                    Reporter
+                                </Link>
+                            )}
+                            {userRole === 'MONITOR' && (
+                                <Link to="/dashboard" style={styles.navLink}>
+                                    Dashboard
+                                </Link>
+                            )}
+                            {userRole === 'ADMIN' && (
+                                <>
+                                    <Link to="/admin" style={styles.navLink}>
+                                        Admin
+                                    </Link>
+                                    <Link to="/dashboard" style={styles.navLink}>
+                                        Dashboard
+                                    </Link>
+                                </>
+                            )}
+                            <button onClick={handleLogout} style={styles.logoutButton}>
+                                Logout
+                            </button>
+                        </>
+                    )}
                 </nav>
             </div>
 
             <main style={styles.content}>
                 <Routes>
-                    <Route path="/" element={<Landing />} />
+                    <Route path="/" element={<Login />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/reporter" element={<ProtectedRoute><ReporterForm /></ProtectedRoute>} />
                     <Route path="/dashboard" element={<ProtectedRoute><MonitorDashboard /></ProtectedRoute>} />
@@ -87,6 +147,20 @@ const styles = {
         border: '1px solid #e5e7eb',
         backgroundColor: '#f8fafc',
         boxShadow: '0 8px 16px rgba(15, 23, 42, 0.08)',
+    },
+    logoutButton: {
+        textDecoration: 'none',
+        color: '#ffffff',
+        fontWeight: 700,
+        padding: '0.65rem 0.95rem',
+        borderRadius: '10px',
+        transition: 'all 0.15s ease',
+        border: '1px solid #dc2626',
+        backgroundColor: '#dc2626',
+        boxShadow: '0 8px 16px rgba(220, 38, 38, 0.3)',
+        cursor: 'pointer',
+        fontSize: 'inherit',
+        fontFamily: 'inherit',
     },
     content: {
         maxWidth: '1600px',

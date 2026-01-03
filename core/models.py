@@ -5,13 +5,15 @@ from django.contrib.auth.models import AbstractUser
 
 
 class Facility(models.Model):
-    facility_name = models.CharField(max_length=255)
-    country = models.CharField(max_length=120, default="Unknown")
-    city_or_state = models.CharField(max_length=120, default="Unknown")
-    location_detail = models.CharField(max_length=255, blank=True, null=True)
+    name = models.CharField(max_length=255)
+    country = models.CharField(max_length=120)
+    city = models.CharField(max_length=120)
+
+    class Meta:
+        unique_together = ("name", "country", "city")
 
     def __str__(self):
-        return self.facility_name
+        return self.name
 
 
 class User(AbstractUser):
@@ -66,4 +68,57 @@ class ResourceReport(models.Model):
     last_updated = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Resource report for {self.facility.facility_name}"
+        return f"Resource report for {self.facility.name}"
+
+
+class ResourceReportHistory(models.Model):
+    """Historical snapshots of resource reports for trend analysis"""
+    facility = models.ForeignKey(
+        Facility,
+        on_delete=models.CASCADE,
+        related_name="report_history",
+    )
+    icu_beds_available = models.PositiveIntegerField()
+    ventilators_available = models.PositiveIntegerField()
+    staff_on_duty = models.PositiveIntegerField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+        verbose_name_plural = "Resource report histories"
+
+    def __str__(self):
+        return f"{self.facility.name} - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
+
+
+class SystemSetting(models.Model):
+    """System-wide configuration settings for thresholds and parameters"""
+    key = models.CharField(max_length=100, unique=True,
+                           help_text="Setting identifier")
+    value = models.CharField(max_length=500, help_text="Setting value")
+    description = models.TextField(
+        blank=True, help_text="Description of what this setting controls")
+    setting_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('THRESHOLD', 'Threshold'),
+            ('GENERAL', 'General'),
+            ('ALERT', 'Alert'),
+        ],
+        default='GENERAL'
+    )
+    last_updated = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="settings_updated"
+    )
+
+    class Meta:
+        ordering = ['setting_type', 'key']
+        verbose_name_plural = "System settings"
+
+    def __str__(self):
+        return f"{self.key} = {self.value}"

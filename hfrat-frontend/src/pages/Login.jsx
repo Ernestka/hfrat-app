@@ -23,6 +23,9 @@ export default function Login() {
 
             localStorage.setItem('user_role', userRole)
 
+            // Dispatch custom event to update App navigation
+            window.dispatchEvent(new Event('authChange'))
+
             if (userRole === 'ADMIN') {
                 navigate('/admin', { replace: true })
             } else if (userRole === 'REPORTER') {

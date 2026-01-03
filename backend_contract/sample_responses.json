@@ -1,0 +1,59 @@
+{
+    "login": {
+        "request": {
+            "username": "admin",
+            "password": "admin123"
+        },
+        "response": {
+            "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIs...",
+            "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIs..."
+        }
+    },
+    "facilities_list": [
+        {
+            "id": 1,
+            "facility_name": "Kinshasa General Hospital",
+            "country": "DR Congo",
+            "city_or_state": "Kinshasa",
+            "location_detail": "Gombe"
+        },
+        {
+            "id": 2,
+            "facility_name": "Kigali Central Hospital",
+            "country": "Rwanda",
+            "city_or_state": "Kigali",
+            "location_detail": null
+        }
+    ],
+    "reports_dashboard": [
+        {
+            "facility_name": "Kinshasa General Hospital",
+            "icu_beds_available": 0,
+            "ventilators_available": 2,
+            "staff_on_duty": 12,
+            "last_updated": "2025-12-29T19:32:10Z",
+            "status": "CRITICAL"
+        },
+        {
+            "facility_name": "Kigali Central Hospital",
+            "icu_beds_available": 16,
+            "ventilators_available": 6,
+            "staff_on_duty": 40,
+            "last_updated": "2025-12-29T19:35:24Z",
+            "status": "OK"
+        }
+    ],
+    "create_report": {
+        "request": {
+            "icu_beds_available": 12,
+            "ventilators_available": 5,
+            "staff_on_duty": 28
+        },
+        "response": {
+            "icu_beds_available": 12,
+            "ventilators_available": 5,
+            "staff_on_duty": 28,
+            "last_updated": "2025-12-29T19:32:10Z"
+        }
+    }
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import api from '../services/api'
 
 export default function ReporterForm() {
@@ -10,6 +10,21 @@ export default function ReporterForm() {
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState('')
     const [messageType, setMessageType] = useState('')
+    const [facilityInfo, setFacilityInfo] = useState(null)
+
+    useEffect(() => {
+        const fetchFacilityInfo = async () => {
+            try {
+                const { data } = await api.get('health/')
+                if (data.facility) {
+                    setFacilityInfo(data.facility)
+                }
+            } catch (err) {
+                console.error('Failed to load facility info:', err)
+            }
+        }
+        fetchFacilityInfo()
+    }, [])
 
     const handleChange = (field) => (e) => {
         setForm({ ...form, [field]: e.target.value })
@@ -71,7 +86,14 @@ export default function ReporterForm() {
                 <div style={styles.header}>
                     <div style={styles.iconBadge}>🏥</div>
                     <h1 style={styles.title}>Resource Availability Report</h1>
-                    <p style={styles.subtitle}>Submit current resource status for your facility</p>
+                    {facilityInfo && (
+                        <p style={styles.subtitle}>
+                            {facilityInfo.name} • {facilityInfo.city}, {facilityInfo.country}
+                        </p>
+                    )}
+                    {!facilityInfo && (
+                        <p style={styles.subtitle}>Submit current resource status for your facility</p>
+                    )}
                     <div style={styles.divider}></div>
                 </div>
 

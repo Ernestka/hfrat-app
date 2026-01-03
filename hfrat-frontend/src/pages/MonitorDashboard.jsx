@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import api from '../services/api'
-import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts'
+import api, { monitorGetTrend, monitorExportDashboard } from '../services/api'
+import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid, LineChart, Line } from 'recharts'
 
 export default function MonitorDashboard() {
     const [reports, setReports] = useState([])
@@ -10,6 +10,10 @@ export default function MonitorDashboard() {
     const [selectedFacility, setSelectedFacility] = useState('')
     const [activeSlice, setActiveSlice] = useState(-1)
     const [showSeries, setShowSeries] = useState({ beds: true, vents: true, staff: true })
+    const [showTrend, setShowTrend] = useState(false)
+    const [trendData, setTrendData] = useState(null)
+    const [trendLoading, setTrendLoading] = useState(false)
+    const [trendError, setTrendError] = useState('')
 
     useEffect(() => {
         let isMounted = true
@@ -44,6 +48,45 @@ export default function MonitorDashboard() {
         if (!value) return '—'
         const date = new Date(value)
         return date.toLocaleString()
+    }
+
+    const handleViewTrend = async (report) => {
+        setShowTrend(true)
+        setTrendLoading(true)
+        setTrendError('')
+
+        try {
+            // Find facility ID - we need to add it to the report data from backend
+            // For now, use facility_name as identifier or add facility_id to the report
+            const data = await monitorGetTrend(report.facility_id || report.id)
+            setTrendData(data)
+        } catch (err) {
+            setTrendError(err.response?.data?.detail || 'Failed to load trend data')
+        } finally {
+            setTrendLoading(false)
+        }
+    }
+
+    const closeTrend = () => {
+        setShowTrend(false)
+        setTrendData(null)
+        setTrendError('')
+    }
+
+    const handleExportDashboard = async () => {
+        try {
+            const response = await monitorExportDashboard()
+            const url = window.URL.createObjectURL(new Blob([response.data]))
+            const link = document.createElement('a')
+            link.href = url
+            const filename = response.headers['content-disposition']?.split('filename=')[1]?.replace(/"/g, '') || 'dashboard_report.xlsx'
+            link.setAttribute('download', filename)
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+        } catch (err) {
+            setError('Failed to export dashboard data')
+        }
     }
 
     const metrics = useMemo(() => {
@@ -135,13 +178,18 @@ export default function MonitorDashboard() {
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <div style={styles.iconBadge}>📈</div>
+               {/*<div style={styles.iconBadge}>📈</div>*/}
                 <h1 style={styles.title}>Central Monitor Dashboard</h1>
                 <p style={styles.subtitle}>Live view of facility resource availability</p>
                 {metrics.totalFacilities > 0 && (
-                    <p style={styles.meta}>
-                        Tracking {metrics.totalFacilities} facilities · Last update {metrics.lastUpdated ? metrics.lastUpdated.toLocaleString() : '—'}
-                    </p>
+                    <>
+                        <p style={styles.meta}>
+                            Tracking {metrics.totalFacilities} facilities · Last update {metrics.lastUpdated ? metrics.lastUpdated.toLocaleString() : '—'}
+                        </p>
+                        <button onClick={handleExportDashboard} style={styles.exportButton}>
+                            📊 Export to Excel
+                        </button>
+                    </>
                 )}
             </div>
 
@@ -278,11 +326,14 @@ export default function MonitorDashboard() {
                                         <thead>
                                             <tr>
                                                 <th style={styles.th}>Facility</th>
+                                                <th style={styles.th}>City</th>
+                                                <th style={styles.th}>Country</th>
                                                 <th style={styles.th}>ICU Beds</th>
                                                 <th style={styles.th}>Ventilators</th>
                                                 <th style={styles.th}>Staff</th>
                                                 <th style={styles.th}>Status</th>
                                                 <th style={styles.th}>Last Updated</th>
+                                                <th style={styles.th}>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -292,6 +343,8 @@ export default function MonitorDashboard() {
                                                     ...(selectedFacility === row.facility_name ? styles.selectedRow : {}),
                                                 }}>
                                                     <td style={styles.td}>{row.facility_name}</td>
+                                                    <td style={styles.td}>{row.city || '—'}</td>
+                                                    <td style={styles.td}>{row.country || '—'}</td>
                                                     <td style={styles.td}>{row.icu_beds_available}</td>
                                                     <td style={styles.td}>{row.ventilators_available}</td>
                                                     <td style={styles.td}>{row.staff_on_duty}</td>
@@ -299,6 +352,15 @@ export default function MonitorDashboard() {
                                                         <span style={statusStyle(row.status)}>{row.status || 'OK'}</span>
                                                     </td>
                                                     <td style={styles.td}>{formatDate(row.last_updated)}</td>
+                                                    <td style={styles.td}>
+                                                        <button
+                                                            onClick={() => handleViewTrend(row)}
+                                                            style={styles.trendButton}
+                                                            title="View 7-day trend"
+                                                        >
+                                                            📊 Trend
+                                                        </button>
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -309,6 +371,80 @@ export default function MonitorDashboard() {
                     </>
                 )}
             </div>
+
+            {showTrend && (
+                <div style={styles.modalOverlay} onClick={closeTrend}>
+                    <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                        <div style={styles.modalHeader}>
+                            <h2 style={styles.modalTitle}>📈 7-Day Historical Trend</h2>
+                            <button onClick={closeTrend} style={styles.closeButton}>✕</button>
+                        </div>
+
+                        {trendLoading ? (
+                            <div style={styles.stateBox}>Loading trend data...</div>
+                        ) : trendError ? (
+                            <div style={{ ...styles.stateBox, ...styles.errorBox }}>{trendError}</div>
+                        ) : trendData && trendData.data && trendData.data.length > 0 ? (
+                            <>
+                                <div style={styles.trendInfo}>
+                                    <strong>{trendData.facility_name}</strong> - {trendData.city}, {trendData.country}
+                                </div>
+                                <ResponsiveContainer width="100%" height={400}>
+                                    <LineChart data={trendData.data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                        <XAxis
+                                            dataKey="date"
+                                            stroke="#6b7280"
+                                            tick={{ fontSize: 12 }}
+                                        />
+                                        <YAxis
+                                            stroke="#6b7280"
+                                            tick={{ fontSize: 12 }}
+                                        />
+                                        <Tooltip
+                                            contentStyle={{
+                                                backgroundColor: '#ffffff',
+                                                border: '1px solid #e5e7eb',
+                                                borderRadius: '8px',
+                                                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                                            }}
+                                        />
+                                        <Legend />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="icu_beds"
+                                            stroke="#2563eb"
+                                            strokeWidth={2}
+                                            name="ICU Beds"
+                                            dot={{ fill: '#2563eb', r: 4 }}
+                                        />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="ventilators"
+                                            stroke="#16a34a"
+                                            strokeWidth={2}
+                                            name="Ventilators"
+                                            dot={{ fill: '#16a34a', r: 4 }}
+                                        />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="staff"
+                                            stroke="#ea580c"
+                                            strokeWidth={2}
+                                            name="Staff on Duty"
+                                            dot={{ fill: '#ea580c', r: 4 }}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </>
+                        ) : (
+                            <div style={styles.stateBox}>
+                                No historical data available for this facility yet. Data is collected when reports are submitted.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -353,6 +489,19 @@ const styles = {
         color: '#4b5563',
         marginTop: '0.3rem',
         fontWeight: 600,
+    },
+    exportButton: {
+        marginTop: '1rem',
+        background: '#059669',
+        color: '#ffffff',
+        border: 'none',
+        borderRadius: '10px',
+        padding: '0.75rem 1.5rem',
+        cursor: 'pointer',
+        fontSize: '0.95rem',
+        fontWeight: 700,
+        boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
+        transition: 'all 0.2s ease',
     },
     card: {
         maxWidth: '1000px',
@@ -515,5 +664,71 @@ const styles = {
         textAlign: 'right',
         fontWeight: 700,
         color: '#111827',
+    },
+    trendButton: {
+        background: '#2563eb',
+        color: '#ffffff',
+        border: 'none',
+        borderRadius: '6px',
+        padding: '0.5rem 0.75rem',
+        cursor: 'pointer',
+        fontSize: '0.85rem',
+        fontWeight: 600,
+        transition: 'all 0.2s ease',
+    },
+    modalOverlay: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '2rem',
+    },
+    modalContent: {
+        backgroundColor: '#ffffff',
+        borderRadius: '16px',
+        boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
+        maxWidth: '900px',
+        width: '100%',
+        maxHeight: '90vh',
+        overflow: 'auto',
+        padding: '2rem',
+    },
+    modalHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '1.5rem',
+        borderBottom: '2px solid #e5e7eb',
+        paddingBottom: '1rem',
+    },
+    modalTitle: {
+        margin: 0,
+        fontSize: '1.5rem',
+        fontWeight: 700,
+        color: '#1f2937',
+    },
+    closeButton: {
+        background: 'transparent',
+        border: 'none',
+        fontSize: '1.5rem',
+        cursor: 'pointer',
+        color: '#6b7280',
+        padding: '0.25rem 0.5rem',
+        borderRadius: '6px',
+        transition: 'all 0.2s ease',
+    },
+    trendInfo: {
+        padding: '0.75rem 1rem',
+        backgroundColor: '#f0f9ff',
+        borderRadius: '8px',
+        marginBottom: '1.5rem',
+        color: '#0c4a6e',
+        border: '1px solid #bae6fd',
     },
 }

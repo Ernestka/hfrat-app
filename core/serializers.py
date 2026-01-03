@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import ResourceReport, User, Facility
+from .models import ResourceReport, User, Facility, SystemSetting
 
 
 class ResourceReportSerializer(serializers.ModelSerializer):
@@ -22,14 +22,21 @@ class ResourceReportSerializer(serializers.ModelSerializer):
 
 
 class DashboardFacilityReportSerializer(serializers.ModelSerializer):
+    facility_id = serializers.IntegerField(
+        source="facility.id", read_only=True)
     facility_name = serializers.CharField(
-        source="facility.facility_name", read_only=True)
+        source="facility.name", read_only=True)
+    country = serializers.CharField(source="facility.country", read_only=True)
+    city = serializers.CharField(source="facility.city", read_only=True)
     status = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ResourceReport
         fields = (
+            "facility_id",
             "facility_name",
+            "country",
+            "city",
             "icu_beds_available",
             "ventilators_available",
             "staff_on_duty",
@@ -39,7 +46,20 @@ class DashboardFacilityReportSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_status(self, obj):
-        return "CRITICAL" if obj.icu_beds_available == 0 else "OK"
+        """Determine facility status based on configurable thresholds"""
+        from .models import SystemSetting
+
+        try:
+            # Get threshold from settings, default to 0 if not found
+            threshold_setting = SystemSetting.objects.filter(
+                key='critical_icu_beds_threshold'
+            ).first()
+            threshold = int(
+                threshold_setting.value) if threshold_setting else 5
+        except (ValueError, AttributeError):
+            threshold = 5
+
+        return "CRITICAL" if obj.icu_beds_available <= threshold else "OK"
 
     def validate_ventilators_available(self, value):
         if value < 0:
@@ -57,41 +77,56 @@ class DashboardFacilityReportSerializer(serializers.ModelSerializer):
 class AdminCreateUserSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(write_only=True, min_length=6)
-    role = serializers.ChoiceField(
-        choices=[User.Role.REPORTER, User.Role.MONITOR, User.Role.ADMINISTRATOR])
-    facility_id = serializers.IntegerField(required=False, allow_null=True)
+    role = serializers.CharField()
+    hospital_name = serializers.CharField(max_length=255, required=False)
+    country = serializers.CharField(max_length=120, required=False)
+    city = serializers.CharField(max_length=120, required=False)
+
+    def validate_role(self, value):
+        normalized = value.upper()
+        valid = {User.Role.REPORTER,
+                 User.Role.MONITOR, User.Role.ADMINISTRATOR}
+        if normalized not in valid:
+            raise serializers.ValidationError(
+                "Role must be one of: ADMIN, MONITOR, REPORTER.")
+        return normalized
 
     def validate(self, attrs):
         role = attrs.get("role")
-        facility_id = attrs.get("facility_id")
+        hospital_name = attrs.get("hospital_name")
+        country = attrs.get("country")
+        city = attrs.get("city")
 
         if role == User.Role.REPORTER:
-            if facility_id is None:
-                raise serializers.ValidationError(
-                    {"facility_id": "Reporters must be assigned to a facility."})
-            # Ensure facility exists
-            try:
-                Facility.objects.get(id=facility_id)
-            except Facility.DoesNotExist:
-                raise serializers.ValidationError(
-                    {"facility_id": "Facility not found."})
+            missing = [field for field, val in {
+                "hospital_name": hospital_name,
+                "country": country,
+                "city": city,
+            }.items() if not val]
+            if missing:
+                raise serializers.ValidationError({
+                    field: "This field is required for reporters." for field in missing
+                })
         else:
-            # MONITOR and ADMIN must not have facility
-            if facility_id is not None:
-                raise serializers.ValidationError(
-                    {"facility_id": "This role must not be assigned to a facility."})
-
+            # MONITOR and ADMIN must not send facility details
+            if any([hospital_name, country, city]):
+                raise serializers.ValidationError({
+                    "facility": "Facility details are only allowed when role is REPORTER."
+                })
         return attrs
 
     def create(self, validated_data):
         username = validated_data["username"]
         password = validated_data["password"]
         role = validated_data["role"]
-        facility_id = validated_data.get("facility_id")
 
         facility = None
-        if role == User.Role.REPORTER and facility_id is not None:
-            facility = Facility.objects.get(id=facility_id)
+        if role == User.Role.REPORTER:
+            facility, _ = Facility.objects.get_or_create(
+                name=validated_data["hospital_name"],
+                country=validated_data["country"],
+                city=validated_data["city"],
+            )
 
         user = User.objects.create_user(
             username=username,
@@ -106,7 +141,7 @@ class AdminCreateUserSerializer(serializers.Serializer):
             "id": instance.id,
             "username": instance.username,
             "role": instance.role,
-            "facility": instance.facility.id if instance.facility else None,
+            "facility": FacilitySerializer(instance.facility).data if instance.facility else None,
         }
 
 
@@ -115,10 +150,9 @@ class FacilitySerializer(serializers.ModelSerializer):
         model = Facility
         fields = (
             "id",
-            "facility_name",
+            "name",
             "country",
-            "city_or_state",
-            "location_detail",
+            "city",
         )
 
 
@@ -129,3 +163,95 @@ class AdminUserListSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "username", "role", "facility"]
         read_only_fields = fields
+
+
+class AdminUpdateUserSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150, required=False)
+    role = serializers.CharField(required=False)
+    hospital_name = serializers.CharField(max_length=255, required=False)
+    country = serializers.CharField(max_length=120, required=False)
+    city = serializers.CharField(max_length=120, required=False)
+    password = serializers.CharField(
+        write_only=True, min_length=6, required=False)
+
+    def validate_role(self, value):
+        if value:
+            normalized = value.upper()
+            valid = {User.Role.REPORTER,
+                     User.Role.MONITOR, User.Role.ADMINISTRATOR}
+            if normalized not in valid:
+                raise serializers.ValidationError(
+                    "Role must be one of: ADMIN, MONITOR, REPORTER.")
+            return normalized
+        return value
+
+    def update(self, instance, validated_data):
+        username = validated_data.get('username')
+        role = validated_data.get('role')
+        password = validated_data.get('password')
+        hospital_name = validated_data.get('hospital_name')
+        country = validated_data.get('country')
+        city = validated_data.get('city')
+
+        if username:
+            instance.username = username
+
+        if role:
+            instance.role = role
+
+            if role == User.Role.REPORTER:
+                if all([hospital_name, country, city]):
+                    facility, _ = Facility.objects.get_or_create(
+                        name=hospital_name,
+                        country=country,
+                        city=city,
+                    )
+                    instance.facility = facility
+                elif not instance.facility:
+                    raise serializers.ValidationError({
+                        "facility": "Reporters must be assigned to a facility."
+                    })
+            else:
+                instance.facility = None
+
+        if password:
+            instance.set_password(password)
+
+        instance.save()
+        return instance
+
+
+class SystemSettingSerializer(serializers.ModelSerializer):
+    updated_by_username = serializers.CharField(
+        source="updated_by.username", read_only=True, allow_null=True)
+
+    class Meta:
+        model = SystemSetting
+        fields = (
+            "id",
+            "key",
+            "value",
+            "description",
+            "setting_type",
+            "last_updated",
+            "updated_by",
+            "updated_by_username",
+        )
+        read_only_fields = ("id", "last_updated",
+                            "updated_by", "updated_by_username")
+
+    def validate_value(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Value cannot be empty.")
+        return value
+
+
+class SystemSettingUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemSetting
+        fields = ("value", "description")
+
+    def validate_value(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Value cannot be empty.")
+        return value
