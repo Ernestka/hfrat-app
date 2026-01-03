@@ -20,6 +20,10 @@ services:
     name: hfrat-frontend
     buildCommand: cd hfrat-frontend && npm install && npm run build
     staticPublishPath: hfrat-frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: VITE_API_URL
         sync: false
