@@ -18,8 +18,9 @@ services:
   # Frontend Static Site
   - type: web
     name: hfrat-frontend
+    runtime: node
     buildCommand: cd hfrat-frontend && npm install && npm run build
-    staticPublishPath: hfrat-frontend/dist
+    startCommand: cd hfrat-frontend && npx serve -s dist -l 10000
     envVars:
       - key: VITE_API_URL
         sync: false
