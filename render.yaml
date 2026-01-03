@@ -15,11 +15,11 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
 
-  # Frontend Static Site (no runtime field for static sites)
+  # Frontend Static Site
   - type: web
     name: hfrat-frontend
-    buildCommand: "cd hfrat-frontend && npm install && npm run build"
-    staticPublishPath: ./hfrat-frontend/dist
+    buildCommand: cd hfrat-frontend && npm install && npm run build
+    staticPublishPath: hfrat-frontend/dist
     envVars:
       - key: VITE_API_URL
         sync: false
