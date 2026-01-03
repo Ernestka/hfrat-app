@@ -2,6 +2,7 @@ services:
   # Backend API Service (using SQLite - note: data will not persist across deployments)
   - type: web
     name: hfrat-backend
+    rootDirectory: .
     runtime: python
     buildCommand: "chmod +x build.sh && ./build.sh"
     startCommand: "gunicorn hfrat_backend.wsgi:application"
@@ -18,9 +19,10 @@ services:
   # Frontend Static Site
   - type: web
     name: hfrat-frontend
+    rootDirectory: hfrat-frontend
     runtime: node
-    buildCommand: cd hfrat-frontend && npm install && npm run build
-    startCommand: cd hfrat-frontend && npx serve -s dist -l 10000
+    buildCommand: npm install && npm run build
+    startCommand: npx serve -s dist -l 10000
     envVars:
       - key: VITE_API_URL
         sync: false
