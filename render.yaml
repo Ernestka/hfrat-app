@@ -20,9 +20,8 @@ services:
         sync: false
 
   # Frontend Static Site
-  - type: web
+  - type: static
     name: hfrat-frontend
-    runtime: node
     buildCommand: "cd hfrat-frontend && npm install && npm run build"
     staticPublishPath: ./hfrat-frontend/dist
     pullRequestPreviewsEnabled: true
